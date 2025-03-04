@@ -340,12 +340,14 @@ def update_process_info(proc, info_frame, labels=None):
                 command=lambda: save_pid_to_clipboard(proc),
                 borderwidth=0,
                 bg="#1e2120",
+                foreground='green',
                 relief="flat",
+                anchor="center",          
                 activebackground="#2d2f2e",
                 highlightbackground="#1e2120",
                 activeforeground="green",
             )
-            save_pid_button.grid(row=0, column=1, padx=10)
+            save_pid_button.grid(row=0, column=0, padx=100)
 
             name_label = tk.Label(
                 info_section,
