@@ -13,9 +13,10 @@ processes_sorted: list[int] = []
 filtered_processes: list[int] = []
 is_search_active = False
 search_term = ""
+is_updating = False
 
 
-def sort_by_memory(event=None):
+def sort_by_memory(event=None) -> None:
     """Сортировка по памяти"""
     global processes_sorted, current_sort_field, current_sort_order
     if current_sort_field == "memory":
@@ -29,7 +30,7 @@ def sort_by_memory(event=None):
     update_treeview()
 
 
-def sort_by_name(event=None):
+def sort_by_name(event=None) -> None:
     """Сортировка по имени"""
     global processes_sorted, current_sort_field, current_sort_order
     if current_sort_field == "name":
@@ -41,7 +42,7 @@ def sort_by_name(event=None):
     update_treeview()
 
 
-def sort_by_cpu(event=None):
+def sort_by_cpu(event=None) -> None:
     """Сортировка по CPU"""
     global processes_sorted, current_sort_field, current_sort_order
     if current_sort_field == "cpu":
@@ -53,7 +54,7 @@ def sort_by_cpu(event=None):
     update_treeview()
 
 
-def sort_by_pid(event=None):
+def sort_by_pid(event=None) -> None:
     """Сортировка по PID"""
     global processes_sorted, current_sort_field, current_sort_order
     if current_sort_field == "pid":
@@ -65,7 +66,7 @@ def sort_by_pid(event=None):
     update_treeview()
 
 
-def sort_by_status(event=None):
+def sort_by_status(event=None) -> None:
     """Сортировка по статусу"""
     global processes_sorted, current_sort_field, current_sort_order
     if current_sort_field == "status":
@@ -77,8 +78,15 @@ def sort_by_status(event=None):
     update_treeview()
 
 
-def update_treeview():
-    """Функция для обновления данных в Treeview"""
+def update_treeview() -> None:
+    """
+    Обновление отображаемых данных в Treeview.
+
+    Обновляет данные в интерфейсе, удаляя старые строки и вставляя новые.
+    Также обновляет выделенные элементы в Treeview.
+
+    """
+
     global selected_pids, filtered_processes
 
     selected_pids = [tree.item(item)["values"][0] for item in tree.selection()]
@@ -94,8 +102,19 @@ def update_treeview():
             tree.selection_add(item)
 
 
-def find_processes_with_ports():
-    """Функция для поиска всех процессов с открытыми портами"""
+def find_processes_with_ports() -> set:
+    """
+    Поиск процессов с открытыми портами.
+
+    Использует psutil для поиска всех процессов с открытыми TCP/UDP портами.
+
+    Args:
+        None
+
+    Returns:
+        (set): Множество PIDs процессов с открытыми портами.
+    """
+
     connections = psutil.net_connections(kind="inet")
     processes_with_ports = set()
 
@@ -109,8 +128,17 @@ def find_processes_with_ports():
     return processes_with_ports
 
 
-def search_process(event=None):
-    """Функция для поиска процесса по PID, имени, порту, состоянию или вывода всех процессов с портами"""
+def search_process(event=None) -> None:
+    """
+    Поиск процессов по PID, имени, порту, состоянию или вывода всех процессов с портами.
+
+    Args:
+        event (tk.Event, optional): Событие, передаваемое при активации поиска.
+
+    Returns:
+        None
+    """
+
     global filtered_processes, is_search_active, search_term
 
     search_term = search_entry.get().strip().lower()
@@ -172,8 +200,17 @@ def search_process(event=None):
     update_treeview()
 
 
-def find_process_by_port(port):
-    """Функция для поиска процесса по порту"""
+def find_process_by_port(port) -> (tuple[str, int | None] | None):
+    """
+    Поиск процесса по порту.
+
+    Args:
+        port (int): Номер порта для поиска.
+
+    Returns:
+        (tuple or None): Кортеж с именем процесса и PID, если процесс найден; иначе None.
+    """
+
     connections = psutil.net_connections(kind="inet")
     for conn in connections:
         if conn.status == "LISTEN" and conn.laddr.port == port:
@@ -187,8 +224,12 @@ def find_process_by_port(port):
     return None
 
 
-def update_data():
-    """Функция для обновления списка процессов"""
+def update_data() -> None:
+    """
+    Функция для обновления списка процессов
+    Получает данные о процессах, сортирует их и обновляет отображаемые процессы.
+
+    """
     global processes_sorted, filtered_processes, is_search_active
 
     if is_search_active:
@@ -252,8 +293,17 @@ def update_data():
     root.after(2000, update_data)
 
 
-def show_process_info(event):
-    """Функция для отображения информации о выбранном процессе"""
+def show_process_info(event) -> None:
+    """
+    Отображение информации о выбранном процессе.
+
+    Args:
+        event (tk.Event): Событие при активации отображения информации о процессе.
+
+    Returns:
+        None
+    """
+
     selected_item = tree.selection()[0]
     selected_pid = tree.item(selected_item)["values"][0]
 
@@ -263,30 +313,47 @@ def show_process_info(event):
             break
 
 
-def save_pid_to_clipboard(proc):
-    """Функция для сохранения PID в буфер обмена"""
+def save_pid_to_clipboard(proc) -> None:
+    """
+    Копирование PID процесса в буфер обмена.
+
+    Args:
+        proc (psutil.Process): Объект процесса, PID которого нужно скопировать.
+
+    Returns:
+        None
+    """
+
     pid_info = proc[0]
     pyperclip.copy(pid_info)
     print("PID copied to clipboard")
 
 
-is_updating = False
-
-
-def start_update_process_info():
+def start_update_process_info() -> None:
     """Запуск обновлений информации о процессе"""
     global is_updating
     is_updating = True
 
 
-def stop_update_process_info():
+def stop_update_process_info() -> None:
     """Остановка обновлений информации о процессе"""
     global is_updating
     is_updating = False
 
 
-def update_process_info(proc, info_frame, labels=None):
-    """Функция для обновления информации о процессе в реальном времени без мерцания"""
+def update_process_info(proc, info_frame, labels=None) -> None:
+    """
+    Обновление информации о процессе.
+
+    Args:
+        proc (psutil.Process): Процесс для обновления данных.
+        info_frame (tk.Frame): Фрейм для отображения информации о процессе.
+        labels (list, optional): Список меток для обновления информации.
+
+    Returns:
+        None
+    """
+    
     if not is_updating:
         return
 
@@ -429,8 +496,17 @@ def update_process_info(proc, info_frame, labels=None):
         back_to_process_list(info_frame)
 
 
-def display_process_info(proc):
-    """Функция для отображения подробной информации о процессе"""
+def display_process_info(proc) -> None:
+    """
+    Отображение подробной информации о процессе.
+
+    Args:
+        proc (psutil.Process): Процесс, для которого нужно отобразить информацию.
+
+    Returns:
+        None
+    """
+
     tree_frame.pack_forget()
     start_update_process_info()
     info_frame = tk.Frame(root, bg="#1e2120")
@@ -438,8 +514,17 @@ def display_process_info(proc):
     update_process_info(proc, info_frame)
 
 
-def back_to_process_list(info_frame):
-    """Функция для возврата к списку процессов"""
+def back_to_process_list(info_frame) -> None:
+    """
+    Возврат к списку процессов.
+
+    Args:
+        info_frame (tk.Frame): Фрейм, с которого нужно вернуться к списку.
+
+    Returns:
+        None
+    """
+
     info_frame.pack_forget()
     stop_update_process_info()
     tree_frame.pack(expand=True, fill="both")

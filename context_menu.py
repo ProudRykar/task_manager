@@ -112,7 +112,14 @@ def create_context_menu(tree, event, processes_sorted):
 
 
 def bind_context_menu(tree, processes_sorted):
-    """Привязка контекстного меню к правому клику мыши"""
+    """
+    Привязка контекстного меню к дереву процессов.
+
+    Args:
+        tree (tk.Treeview): Дерево процессов для привязки контекстного меню.
+        processes_sorted (list): Сортированные процессы для дальнейшей работы с меню.
+    """
+    
     tree.bind(
         "<Button-3>", lambda event: create_context_menu(tree, event, processes_sorted)
     )
