@@ -110,7 +110,7 @@ def find_processes_with_ports():
 
 
 def search_process(event=None):
-    """Функция для поиска процесса по PID, имени, порту или вывода всех процессов с портами"""
+    """Функция для поиска процесса по PID, имени, порту, состоянию или вывода всех процессов с портами"""
     global filtered_processes, is_search_active, search_term
 
     search_term = search_entry.get().strip().lower()
@@ -118,35 +118,49 @@ def search_process(event=None):
     if search_term:
         is_search_active = True
 
-        if search_term == ":ports":
+        state_commands = {
+            '/idle': 'idle',
+            '/zombie': 'zombie',
+            '/running': 'running',
+            '/sleeping': 'sleeping',
+            '/stopped': 'stopped'
+        }
+
+        if search_term in state_commands:
+            target_state = state_commands[search_term]
+
+            filtered_processes = [
+                proc for proc in processes_sorted 
+                if len(proc) > 4 and proc[4].lower() == target_state
+            ]
+
+        elif search_term == ":ports":
             processes_with_ports = find_processes_with_ports()
             filtered_processes = [
                 proc for proc in processes_sorted if proc[0] in processes_with_ports
             ]
 
-        elif ":" in search_term and search_term != ":ports":
+        elif ":" in search_term and search_term != "/ports":
             port_str = search_term.lstrip(":")
             if port_str.isdigit():
                 port = int(port_str)
                 process_by_port = find_process_by_port(port)
                 if process_by_port:
                     filtered_processes = [
-                        proc
-                        for proc in processes_sorted
+                        proc for proc in processes_sorted
                         if proc[0] == process_by_port[1]
                     ]
                 else:
                     filtered_processes = []
             else:
                 filtered_processes = []
-        else:
 
+        else:
             if search_term.isdigit():
                 filtered_processes = [
                     proc for proc in processes_sorted if str(proc[0]) == search_term
                 ]
             else:
-
                 filtered_processes = [
                     proc for proc in processes_sorted if search_term in proc[1].lower()
                 ]
