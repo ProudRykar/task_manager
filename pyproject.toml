@@ -10,7 +10,8 @@ requires-python = ">=3.13"
 dependencies = [
     "tk (>=0.1.0,<0.2.0)",
     "pyperclip (>=1.9.0,<2.0.0)",
-    "psutil (>=7.0.0,<8.0.0)"
+    "psutil (>=7.0.0,<8.0.0)",
+    "matplotlib (>=3.10.1,<4.0.0)"
 ]
 
 

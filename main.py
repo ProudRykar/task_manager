@@ -1,10 +1,10 @@
+import time
 import tkinter as tk
 from tkinter import ttk
+from tkinter import messagebox
 
 import psutil
 import pyperclip
-
-from context_menu import bind_context_menu
 
 current_sort_field = "memory"
 current_sort_order = True
@@ -14,6 +14,105 @@ filtered_processes: list[int] = []
 is_search_active = False
 search_term = ""
 is_updating = False
+
+current_menu = None
+global_hide_menu = None
+
+class Context_Menu:
+
+    def create_context_menu(self, tree, event, processes_sorted):
+        """Создает контекстное меню для процесса при клике правой кнопкой мыши"""
+
+        global current_menu
+        global global_hide_menu
+
+        def kill_process(pid):
+            """Завершить процесс по PID (корректное завершение)"""
+
+            global processes_sorted, filtered_processes
+            try:
+                process = psutil.Process(pid)
+                process.terminate()
+                messagebox.showinfo("Успех", f"Процесс {pid} завершен.")
+                # Убираем процесс из результатов поиска
+                filtered_processes = [proc for proc in filtered_processes if proc[0] != pid]
+                update_treeview()
+            except psutil.NoSuchProcess:
+                messagebox.showerror("Ошибка", f"Процесс {pid} не существует.")
+            except psutil.AccessDenied:
+                messagebox.showerror("Ошибка", f"Нет доступа для завершения процесса {pid}.")
+
+
+        def force_kill_process(pid):
+            """Принудительно завершить процесс по PID (SIGKILL)"""
+            global processes_sorted, filtered_processes
+            try:
+                process = psutil.Process(pid)
+                process.kill()
+                messagebox.showinfo("Успех", f"Процесс {pid} был принудительно завершен.")
+                # Убираем процесс из результатов поиска
+                filtered_processes = [proc for proc in filtered_processes if proc[0] != pid]
+                update_treeview()
+            except psutil.NoSuchProcess:
+                messagebox.showerror("Ошибка", f"Процесс {pid} не существует.")
+            except psutil.AccessDenied:
+                messagebox.showerror("Ошибка", f"Нет доступа для завершения процесса {pid}.")
+            except psutil.ZombieProcess:
+                messagebox.showerror("Ошибка", f"Процесс {pid} является зомби.")
+
+        item = tree.identify_row(event.y)
+        if not item:
+            return
+
+        tree.selection_set(item)
+
+        menu = tk.Menu(tree, tearoff=0)
+        menu.config(background="#1e2120", foreground="white")
+        pid = int(tree.item(item)["values"][0])
+
+        menu.add_command(label="Завершить процесс", command=lambda: kill_process(pid))
+        menu.add_command(label="Убить", command=lambda: force_kill_process(pid))
+
+        def on_leave(event):
+            global global_hide_menu
+
+            if global_hide_menu:
+                menu.after_cancel(global_hide_menu)
+                global_hide_menu = None
+
+            x, y = menu.winfo_pointerxy()
+
+            if not (
+                x >= menu.winfo_rootx()
+                and x <= menu.winfo_rootx() + menu.winfo_width()
+                and y >= menu.winfo_rooty()
+                and y <= menu.winfo_rooty() + menu.winfo_height()
+            ):
+
+                global_hide_menu = menu.after(3000, menu.unpost)
+
+        def on_enter(event):
+            global global_hide_menu
+
+            if global_hide_menu:
+                menu.after_cancel(global_hide_menu)
+                global_hide_menu = None
+
+        def close_menu(event):
+            """Закрывает контекстное меню при левом клике"""
+            if current_menu:
+                current_menu.unpost()
+
+        menu.bind("<Leave>", on_leave)
+        menu.bind("<Enter>", on_enter)
+        tree.bind("<Button-1>", close_menu)
+
+        if current_menu:
+            current_menu.unpost()
+
+        current_menu = menu
+
+        menu.post(event.x_root, event.y_root)
 
 
 def sort_by_memory(event=None) -> None:
@@ -130,7 +229,7 @@ def find_processes_with_ports() -> set:
 
 def search_process(event=None) -> None:
     """
-    Поиск процессов по PID, имени, порту, состоянию или вывода всех процессов с портами.
+    Поиск процессов по PID, имени, порту, состоянию, зависшим процессам или вывода всех процессов с портами.
 
     Args:
         event (tk.Event, optional): Событие, передаваемое при активации поиска.
@@ -141,7 +240,7 @@ def search_process(event=None) -> None:
 
     global filtered_processes, is_search_active, search_term
 
-    search_term = search_entry.get().strip().lower()
+    search_term = state_combobox.get().strip().lower()
 
     if search_term:
         is_search_active = True
@@ -151,16 +250,24 @@ def search_process(event=None) -> None:
             '/zombie': 'zombie',
             '/running': 'running',
             '/sleeping': 'sleeping',
-            '/stopped': 'stopped'
+            '/stopped': 'stopped',
+            '/hanging': 'hanging'
         }
 
         if search_term in state_commands:
             target_state = state_commands[search_term]
 
             filtered_processes = [
-                proc for proc in processes_sorted 
+                proc for proc in processes_sorted
                 if len(proc) > 4 and proc[4].lower() == target_state
             ]
+
+        elif search_term == "/hanging":
+            hanging_processes = [
+                proc for proc in processes_sorted 
+                if len(proc) > 4 and is_process_hanging(proc)
+            ]
+            filtered_processes = hanging_processes
 
         elif search_term == ":ports":
             processes_with_ports = find_processes_with_ports()
@@ -198,6 +305,33 @@ def search_process(event=None) -> None:
         filtered_processes = processes_sorted
 
     update_treeview()
+
+
+def is_process_hanging(proc) -> bool:
+    """
+    Функция для проверки, является ли процесс зависшим.
+
+    Проверка может основываться на различных факторах, например, времени бездействия
+    или других критериях.
+
+    Args:
+        proc (list): Список, представляющий процесс.
+
+    Returns:
+        bool: True, если процесс завис, иначе False.
+    """
+    
+    try:
+        last_active_time = proc[5]  
+        current_time = time.time()  
+        idle_threshold = 3600
+
+        if (current_time - last_active_time) > idle_threshold:
+            return True
+        return False
+    except IndexError:
+
+        return False
 
 
 def find_process_by_port(port) -> (tuple[str, int | None] | None):
@@ -360,9 +494,13 @@ def update_process_info(proc, info_frame, labels=None) -> None:
     try:
         process = psutil.Process(proc[0])
         cpu = process.cpu_percent(interval=0.5)
+
+        start_time = process.create_time()
+        active_time_seconds = int(psutil.time.time() - start_time)
+        active_time = f"{active_time_seconds // 3600}h {active_time_seconds % 3600 // 60}m {active_time_seconds % 60}s"
+
         memory = process.memory_info().rss / 1024 / 1024
         status = process.status()
-
         port = None
         connections = psutil.net_connections(kind="inet")
         for conn in connections:
@@ -443,6 +581,15 @@ def update_process_info(proc, info_frame, labels=None) -> None:
             )
             memory_label.grid(row=3, column=0, sticky="w", padx=10, pady=5)
 
+            time_label = tk.Label(
+            info_section,
+            text=f"Active Time: {active_time}",
+            bg="#1e2120",
+            fg="white",
+            font=("Arial", 10),
+            )
+            time_label.grid(row=4, column=0, sticky="w", padx=10, pady=5)
+            
             status_label = tk.Label(
                 info_section,
                 text=f"Status: {status}",
@@ -450,7 +597,7 @@ def update_process_info(proc, info_frame, labels=None) -> None:
                 fg="white",
                 font=("Arial", 10),
             )
-            status_label.grid(row=4, column=0, sticky="w", padx=10, pady=5)
+            status_label.grid(row=5, column=0, sticky="w", padx=10, pady=5)
 
             if port:
                 port_label = tk.Label(
@@ -460,7 +607,7 @@ def update_process_info(proc, info_frame, labels=None) -> None:
                     fg="white",
                     font=("Arial", 10),
                 )
-                port_label.grid(row=5, column=0, sticky="w", padx=10, pady=5)
+                port_label.grid(row=6, column=0, sticky="w", padx=10, pady=5)
 
             back_button = tk.Button(
                 info_frame,
@@ -479,12 +626,14 @@ def update_process_info(proc, info_frame, labels=None) -> None:
             labels = {
                 "cpu": cpu_label,
                 "memory": memory_label,
+                "active_time": time_label,
                 "status": status_label,
                 "port": (port_label if port else None),
             }
 
         labels["cpu"].config(text=f"CPU Usage: {cpu:.2f}%")
         labels["memory"].config(text=f"Memory Usage: {memory:.2f} MB")
+        labels["active_time"].config(text=f"Active Time: {active_time}")
         labels["status"].config(text=f"Status: {status}")
         if port:
             labels["port"].config(text=f"Port: {port}")
@@ -580,31 +729,74 @@ tree.heading("Status", command=sort_by_status)
 tree.tag_configure("even", background="#1e2120", foreground="green")
 tree.tag_configure("odd", background="#1e2120", foreground="green")
 
-bind_context_menu(tree, processes_sorted)
 tree.bind("<Double-1>", show_process_info)
+
+def filter_combobox(event=None):
+    """
+    Фильтровать список команд в Combobox на основе введенного текста.
+    Поддерживает поиск по любому тексту (цифры, команды, имена).
+    """
+    search_text = state_combobox.get().lower()
+    
+    filtered_commands = [command for command in state_commands if search_text in command.lower()]
+    
+    current_value = state_combobox.get()
+
+    state_combobox['values'] = filtered_commands
+    
+    if not filtered_commands or current_value not in filtered_commands:
+        state_combobox.set(current_value)
+
+def show_dropdown(event=None):
+    """
+    Показать выпадающий список внутри поля ввода и сразу открыть его.
+    """
+ 
+    x = state_combobox.winfo_x()
+    y = state_combobox.winfo_y()
+    width = state_combobox.winfo_width()
+    state_combobox.place(x=x, y=y, width=width)
+    
+    state_combobox.focus_set()
+    state_combobox.event_generate("<Button-1>", x=0, y=0) 
+
+def on_combobox_select(event):
+    """
+    Обработчик выбора из выпадающего списка.
+    """
+    selected_value = state_combobox.get()
+    state_combobox.set(selected_value)
+    search_process()
+
+state_commands = [
+    "/idle", "/zombie", "/running", "/sleeping", "/stopped", "/hanging", ":ports",
+]
 
 search_frame = tk.Frame(root)
 search_frame.pack(side="bottom", pady=10, anchor="center")
 search_frame.config(bg="#1e2120")
 
+style = ttk.Style()
+style.configure("TCombobox", fieldbackground="#1e2120", background="#1e2120", foreground="white", arrowsize=15)
+
 search_label = tk.Label(
-    search_frame, text="Search by PID or Name:", bg="#2e2e2e", fg="white"
+    search_frame, text="Search by PID or Name:", bg="#1e2120", fg="white"
 )
 search_label.pack(side="left")
-search_label.config(bg="#1e2120", foreground="white")
 
-search_entry = ttk.Entry(search_frame, style="TEntry")
-style.configure(
-    "TEntry", fieldbackground="#1e2120", foreground="white", insertcolor="white"
-)
-search_entry.pack(side="left", padx=10)
+state_combobox = ttk.Combobox(search_frame, values=state_commands, state="normal", style="TCombobox")
+state_combobox.pack(side="left", padx=10)
 
 search_button = tk.Button(search_frame, text="Search", command=search_process)
 search_button.pack(side="left")
 search_button.config(bg="#1e2120", foreground="white", activebackground="#1e2120")
 
-search_entry.bind("<Return>", lambda event: search_process())
+state_combobox.bind("<Return>", lambda event: search_process())
 
+state_combobox.bind("<KeyRelease>", filter_combobox)
+state_combobox.bind("<<ComboboxSelected>>", on_combobox_select)
+
+tree.bind("<Button-3>", lambda event: Context_Menu().create_context_menu(tree, event, processes_sorted))
 
 update_data()
 root.mainloop()
