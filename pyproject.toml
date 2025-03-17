@@ -6,12 +6,13 @@ authors = [
     {name = "ProudRykar",email = "proudrykar@mail.ru"}
 ]
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.13,<3.14"
 dependencies = [
     "tk (>=0.1.0,<0.2.0)",
     "pyperclip (>=1.9.0,<2.0.0)",
     "psutil (>=7.0.0,<8.0.0)",
-    "matplotlib (>=3.10.1,<4.0.0)"
+    "matplotlib (>=3.10.1,<4.0.0)",
+    "pyside6 (>=6.8.2.1,<7.0.0.0)"
 ]
 
 
