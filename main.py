@@ -8,14 +8,25 @@ import pyperclip
 
 
 class ContextMenu:
+    """Класс для управления контекстным меню, отображаемым при правом клике на процесс в таблице."""
+
     def __init__(self, app):
+        """
+        Args:
+            app (TaskManagerApp): Экземпляр основного приложения для взаимодействия с данными и интерфейсом.
+        """
         self.app = app
         self.current_menu = None
         self.global_hide_menu = None
 
     def create_context_menu(self, tree, event):
-        """Создает контекстное меню для выбранного процесса в таблице при правом клике мыши"""
+        """
+        Создает контекстное меню для выбранного процесса в таблице при правом клике мыши.
 
+        Args:
+            tree (ttk.Treeview): Таблица процессов, где отображается контекстное меню.
+            event (tk.Event): Событие клика мыши, содержащее координаты.
+        """
         item = tree.identify_row(event.y)
         if not item:
             return
@@ -27,36 +38,75 @@ class ContextMenu:
         self._show_menu(menu, event)
 
     def _build_menu(self, tree, pid):
-        """Создает само контекстное меню с командами 'Завершить процесс' и 'Убить'"""
+        """
+        Создает само контекстное меню с командами 'Завершить процесс' и 'Убить'.
 
+        Args:
+            tree (ttk.Treeview): Таблица процессов, к которой привязывается меню.
+            pid (int): Идентификатор процесса для завершения.
+
+        Returns:
+            tk.Menu: Созданное контекстное меню.
+        """
         menu = tk.Menu(tree, tearoff=0, bg="#1e2120", fg="white")
         menu.add_command(label="Завершить процесс", command=lambda: self._terminate_process(pid))
         menu.add_command(label="Убить", command=lambda: self._force_kill_process(pid))
         return menu
 
     def _bind_menu_events(self, menu, tree):
-        """Привязывает события к меню: уход мыши, вход мыши и клик вне меню для закрытия"""
+        """
+        Привязывает события к меню: уход мыши, вход мыши и клик вне меню для закрытия.
 
+        Args:
+            menu (tk.Menu): Контекстное меню, к которому привязываются события.
+            tree (ttk.Treeview): Таблица процессов для отслеживания кликов.
+        """
         menu.bind("<Leave>", self._on_leave)
         menu.bind("<Enter>", self._on_enter)
         tree.bind("<Button-1>", self._close_menu_on_click)
 
     def _show_menu(self, menu, event):
-        """Отображает контекстное меню в месте клика мыши"""
+        """
+        Отображает контекстное меню в месте клика мыши.
+
+        Args:
+            menu (tk.Menu): Контекстное меню для отображения.
+            event (tk.Event): Событие клика мыши с координатами.
+        """
         self.current_menu = menu
         self.current_menu.post(event.x_root, event.y_root)
 
     def _terminate_process(self, pid):
-        """Пытается мягко завершить процесс по PID."""
+        """
+        Пытается мягко завершить процесс по PID.
+
+        Args:
+            pid (int): Идентификатор процесса для завершения.
+        """
         self._kill_process(pid, force=False)
 
     def _force_kill_process(self, pid):
-        """Принудительно убивает процесс по PID"""
+        """
+        Принудительно убивает процесс по PID.
+
+        Args:
+            pid (int): Идентификатор процесса для завершения.
+        """
         self._kill_process(pid, force=True)
 
     def _kill_process(self, pid, force=False):
-        """Основная функция завершения процесса: мягко или принудительно, в зависимости от force"""
+        """
+        Основная функция завершения процесса: мягко или принудительно, в зависимости от force.
 
+        Args:
+            pid (int): Идентификатор процесса для завершения.
+            force (bool): Если True, процесс завершается принудительно (kill), иначе мягко (terminate).
+
+        Exceptions:
+            psutil.NoSuchProcess: Если процесс с указанным PID не существует.
+            psutil.AccessDenied: Если нет прав для завершения процесса.
+            psutil.ZombieProcess: Если процесс является зомби.
+        """
         try:
             process = psutil.Process(pid)
             if force:
@@ -75,26 +125,38 @@ class ContextMenu:
             messagebox.showerror("Ошибка", f"Процесс {pid} является зомби.")
 
     def _on_leave(self, event):
-        """Скрывает меню через 3 секунды после того, как мышь ушла с него."""
+        """
+        Скрывает меню через 3 секунды после того, как мышь ушла с него.
 
+        Args:
+            event (tk.Event): Событие ухода мыши с меню.
+        """
         if self.global_hide_menu:
             event.widget.after_cancel(self.global_hide_menu)
         self.global_hide_menu = event.widget.after(3000, event.widget.unpost)
 
     def _on_enter(self, event):
-        """Отменяет скрытие меню, если мышь вернулась на него"""
+        """
+        Отменяет скрытие меню, если мышь вернулась на него.
 
+        Args:
+            event (tk.Event): Событие входа мыши на меню.
+        """
         if self.global_hide_menu:
             event.widget.after_cancel(self.global_hide_menu)
             self.global_hide_menu = None
 
     def _close_menu_on_click(self, event):
-        """Закрывает меню, если кликнули вне его."""
+        """
+        Закрывает меню, если кликнули вне его.
+
+        Args:
+            event (tk.Event): Событие клика мыши.
+        """
         self._close_existing_menu()
 
     def _close_existing_menu(self):
-        """Закрывает текущее открытое меню, если оно существует"""
-
+        """Закрывает текущее открытое меню, если оно существует."""
         if self.current_menu:
             self.current_menu.unpost()
             self.current_menu = None
@@ -105,6 +167,8 @@ class ContextMenu:
 
 
 class TaskManagerApp:
+    """Класс основного приложения Task Manager для отображения и управления процессами системы."""
+
     def __init__(self):
         self.root = tk.Tk()
         self.root.title("Task Manager")
@@ -125,8 +189,7 @@ class TaskManagerApp:
         self.context_menu = ContextMenu(self)
 
     def _setup_ui(self):
-        """Настраивает основной интерфейс приложения: таблицу и строку поиска"""
-
+        """Настраивает основной интерфейс приложения: таблицу и строку поиска."""
         self._setup_treeview()
         self._setup_search_frame()
         self.tree.bind("<Button-3>", lambda event: self.context_menu.create_context_menu(self.tree, event))
@@ -134,8 +197,7 @@ class TaskManagerApp:
         self.root.after(2000, self.update_data)
 
     def _setup_treeview(self):
-        """Создает и настраивает таблицу для отображения процессов"""
-
+        """Создает и настраивает таблицу для отображения процессов."""
         self.tree_frame = tk.Frame(self.root, bg="#1e2120")
         self.tree_frame.pack(expand=True, fill="both")
 
@@ -172,7 +234,6 @@ class TaskManagerApp:
 
     def _setup_search_frame(self):
         """Создает нижнюю панель с полем поиска и кнопкой."""
-
         self.search_frame = tk.Frame(self.root, bg="#1e2120")
         self.search_frame.pack(side="bottom", pady=10, anchor="center")
 
@@ -192,8 +253,7 @@ class TaskManagerApp:
         search_button.pack(side="left")
 
     def update_treeview(self):
-        """Обновляет содержимое таблицы процессов, сохраняя выделение"""
-
+        """Обновляет содержимое таблицы процессов, сохраняя выделение."""
         self.selected_pids = [self.tree.item(item)["values"][0] for item in self.tree.selection()]
         for row in self.tree.get_children():
             self.tree.delete(row)
@@ -205,8 +265,7 @@ class TaskManagerApp:
                 self.tree.selection_add(item)
 
     def update_data(self):
-        """Обновляет данные о процессах каждые 2 секунды, если поиск не активен"""
-
+        """Обновляет данные о процессах каждые 2 секунды, если поиск не активен."""
         if self.is_search_active:
             self.root.after(2000, self.update_data)
             return
@@ -247,8 +306,13 @@ class TaskManagerApp:
         self.root.after(2000, self.update_data)
 
     def sort_processes_by_field(self, field: str, reverse: bool) -> None:
-        """Сортирует процессы по указанному полю с учетом направления сортировки"""
+        """
+        Сортирует процессы по указанному полю с учетом направления сортировки.
 
+        Args:
+            field (str): Поле для сортировки (pid, name, cpu, memory, status).
+            reverse (bool): Направление сортировки (True для убывания, False для возрастания).
+        """
         if self.current_sort_field == field:
             self.current_sort_order = not self.current_sort_order
         else:
@@ -268,28 +332,42 @@ class TaskManagerApp:
             self.update_treeview()
 
     def sort_by_memory(self, event=None) -> None:
-        """Сортирует процессы по использованию памяти"""
+        """
+        Сортирует процессы по использованию памяти.
+        """
         self.sort_processes_by_field("memory", True)
 
     def sort_by_name(self, event=None) -> None:
-        """Сортирует процессы по имени"""
+        """
+        Сортирует процессы по имени.
+        """
         self.sort_processes_by_field("name", False)
 
     def sort_by_cpu(self, event=None) -> None:
-        """Сортирует процессы по использованию CPU"""
+        """
+        Сортирует процессы по использованию CPU.
+        """
         self.sort_processes_by_field("cpu", True)
 
     def sort_by_pid(self, event=None) -> None:
-        """Сортирует процессы по PID"""
+        """
+        Сортирует процессы по PID.
+        """
         self.sort_processes_by_field("pid", False)
 
     def sort_by_status(self, event=None) -> None:
-        """Сортирует процессы по статусу"""
+        """
+        Сортирует процессы по статусу.
+        """
         self.sort_processes_by_field("status", False)
 
     def _filter_combobox(self, event=None) -> None:
-        """Фильтрует варианты в выпадающем списке поиска по введенному тексту"""
+        """
+        Фильтрует варианты в выпадающем списке поиска по введенному тексту.
 
+        Args:
+            event (tk.Event, optional): Событие ввода текста (необязательно).
+        """
         search_text = self.state_combobox.get().lower()
         filtered_commands = [command for command in self.state_commands if search_text in command.lower()]
         current_value = self.state_combobox.get()
@@ -298,15 +376,23 @@ class TaskManagerApp:
             self.state_combobox.set(current_value)
 
     def _on_combobox_select(self, event):
-        """Обрабатывает выбор элемента в выпадающем списке и запускает поиск"""
+        """
+        Обрабатывает выбор элемента в выпадающем списке и запускает поиск.
 
+        Args:
+            event (tk.Event): Событие выбора элемента в комбобоксе.
+        """
         selected_value = self.state_combobox.get()
         self.state_combobox.set(selected_value)
         self.search_process()
 
     def search_process(self, event=None) -> None:
-        """Ищет процессы по PID, имени или фильтрует по состоянию/портам"""
+        """
+        Ищет процессы по PID, имени или фильтрует по состоянию/портам.
 
+        Args:
+            event (tk.Event, optional): Событие, вызывающее поиск (необязательно).
+        """
         self.search_term = self.state_combobox.get().strip().lower()
         if self.search_term:
             self.is_search_active = True
@@ -363,8 +449,18 @@ class TaskManagerApp:
         self.update_treeview()
 
     def is_process_hanging(self, proc) -> bool:
-        """Проверяет, завис ли процесс (неактивен более часа)"""
+        """
+        Проверяет, завис ли процесс (неактивен более часа).
 
+        Args:
+            proc (tuple): Кортеж с информацией о процессе.
+
+        Returns:
+            bool: True, если процесс завис, иначе False.
+
+        Exceptions:
+            IndexError: Если в кортеже proc недостаточно элементов.
+        """
         try:
             last_active_time = proc[5]
             current_time = time.time()
@@ -374,8 +470,12 @@ class TaskManagerApp:
             return False
 
     def find_processes_with_ports(self) -> set:
-        """Находит процессы, которые слушают порты"""
+        """
+        Находит процессы, которые слушают порты.
 
+        Returns:
+            set: Множество PID процессов, слушающих порты.
+        """
         connections = psutil.net_connections(kind="inet")
         processes_with_ports = set()
         for conn in connections:
@@ -384,8 +484,18 @@ class TaskManagerApp:
         return processes_with_ports
 
     def find_process_by_port(self, port) -> (tuple[str, int] | None):
-        """Ищет процесс, который слушает указанный порт"""
+        """
+        Ищет процесс, который слушает указанный порт.
 
+        Args:
+            port (int): Номер порта для поиска.
+
+        Returns:
+            tuple[str, int] | None: Кортеж с именем процесса и PID, если найден, иначе None.
+
+        Exceptions:
+            psutil.NoSuchProcess: Если процесс с найденным PID больше не существует.
+        """
         connections = psutil.net_connections(kind="inet")
         for conn in connections:
             if conn.status == "LISTEN" and conn.laddr.port == port:
@@ -398,8 +508,12 @@ class TaskManagerApp:
         return None
 
     def show_process_info(self, event) -> None:
-        """Показывает подробную информацию о процессе при двойном клике"""
+        """
+        Показывает подробную информацию о процессе при двойном клике.
 
+        Args:
+            event (tk.Event): Событие двойного клика мыши.
+        """
         selected_item = self.tree.selection()[0]
         selected_pid = self.tree.item(selected_item)["values"][0]
         for proc in self.filtered_processes:
@@ -408,24 +522,36 @@ class TaskManagerApp:
                 break
 
     def copy_pid_to_clipboard(self, proc) -> None:
-        """Копирует PID процесса в буфер обмена"""
+        """
+        Копирует PID процесса в буфер обмена.
 
+        Args:
+            proc (tuple): Кортеж с информацией о процессе, включая PID.
+        """
         pyperclip.copy(proc[0])
         print("PID copied to clipboard")
 
     def start_update_process_info(self) -> None:
-        """Запускает обновление информации о процессе"""
-
+        """Запускает обновление информации о процессе."""
         self.is_updating = True
 
     def stop_update_process_info(self) -> None:
-        """Останавливает обновление информации о процессе"""
-
+        """Останавливает обновление информации о процессе."""
         self.is_updating = False
 
     def update_process_info(self, proc, info_frame, labels=None) -> None:
-        """Обновляет данные о процессе в окне информации каждую секунду"""
+        """
+        Обновляет данные о процессе в окне информации каждую секунду.
 
+        Args:
+            proc (tuple): Кортеж с информацией о процессе.
+            info_frame (tk.Frame): Фрейм для отображения информации.
+            labels (dict, optional): Словарь с метками для обновления данных (если None, создаются новые).
+
+        Exceptions:
+            psutil.NoSuchProcess: Если процесс больше не существует.
+            psutil.AccessDenied: Если доступ к процессу запрещен.
+        """
         if not self.is_updating:
             return
         try:
@@ -512,8 +638,12 @@ class TaskManagerApp:
             self.back_to_process_list(info_frame)
 
     def display_process_info(self, proc) -> None:
-        """Отображает окно с подробной информацией о процессе"""
+        """
+        Отображает окно с подробной информацией о процессе.
 
+        Args:
+            proc (tuple): Кортеж с информацией о процессе.
+        """
         self.tree_frame.pack_forget()
         self.start_update_process_info()
         info_frame = tk.Frame(self.root, bg="#1e2120")
@@ -521,8 +651,12 @@ class TaskManagerApp:
         self.update_process_info(proc, info_frame)
 
     def back_to_process_list(self, info_frame) -> None:
-        """Возвращает к списку процессов из окна информации"""
+        """
+        Возвращает к списку процессов из окна информации.
 
+        Args:
+            info_frame (tk.Frame): Фрейм окна информации для скрытия.
+        """
         info_frame.pack_forget()
         self.stop_update_process_info()
         self.tree_frame.pack(expand=True, fill="both")
